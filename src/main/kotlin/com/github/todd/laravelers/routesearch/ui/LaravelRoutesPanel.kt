@@ -44,8 +44,7 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
     private val refreshButton = JButton(AllIcons.Actions.Refresh)
     private val countLabel = JBLabel("0 routes")
 
-    private val listModel = DefaultListModel<RouteItem>()
-    private val routesList = JBList(listModel)
+    private val routesList = JBList<RouteItem>()
 
     // Preview / Details panel
     private val detailPanel = JPanel(BorderLayout(JBUI.scale(8), JBUI.scale(4)))
@@ -55,6 +54,7 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
     private val copyButton = JButton("Copy URI", AllIcons.Actions.Copy)
 
     private val debounceTimer: Timer
+    private var currentSearchGeneration = 0
 
     init {
         // Setup Debounce Timer (150ms)
@@ -79,7 +79,9 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         ApplicationManager.getApplication().executeOnPooledThread {
             indexService.refreshIndex(getEffectiveScope())
             ApplicationManager.getApplication().invokeLater {
-                performSearch()
+                if (!project.isDisposed) {
+                    performSearch()
+                }
             }
         }
     }
@@ -99,17 +101,18 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         // Up/Down in search box navigates list
         searchField.textEditor.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
+                val model = routesList.model
                 when (e.keyCode) {
                     KeyEvent.VK_DOWN -> {
-                        if (listModel.size() > 0) {
-                            val nextIndex = (routesList.selectedIndex + 1).coerceAtMost(listModel.size() - 1)
+                        if (model.size > 0) {
+                            val nextIndex = (routesList.selectedIndex + 1).coerceAtMost(model.size - 1)
                             routesList.selectedIndex = nextIndex
                             routesList.ensureIndexIsVisible(nextIndex)
                             e.consume()
                         }
                     }
                     KeyEvent.VK_UP -> {
-                        if (listModel.size() > 0) {
+                        if (model.size > 0) {
                             val prevIndex = (routesList.selectedIndex - 1).coerceAtLeast(0)
                             routesList.selectedIndex = prevIndex
                             routesList.ensureIndexIsVisible(prevIndex)
@@ -155,7 +158,9 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         scopeCombo.addActionListener {
             ApplicationManager.getApplication().executeOnPooledThread {
                 indexService.refreshIndex(getEffectiveScope())
-                ApplicationManager.getApplication().invokeLater { performSearch() }
+                ApplicationManager.getApplication().invokeLater {
+                    if (!project.isDisposed) performSearch()
+                }
             }
         }
         refreshButton.addActionListener {
@@ -163,8 +168,10 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
             ApplicationManager.getApplication().executeOnPooledThread {
                 indexService.refreshIndex(getEffectiveScope())
                 ApplicationManager.getApplication().invokeLater {
-                    performSearch()
-                    refreshButton.isEnabled = true
+                    if (!project.isDisposed) {
+                        performSearch()
+                        refreshButton.isEnabled = true
+                    }
                 }
             }
         }
@@ -253,7 +260,8 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         }
         detailPanel.isVisible = true
         detailTitle.text = "${item.method} ${item.normalizedUri}" + if (!item.name.isNullOrBlank()) " (${item.name})" else ""
-        detailSnippet.text = "<html><b>${item.filePath}:${item.lineNumber}</b> &nbsp;|&nbsp; <code>${escapeHtml(item.lineContent)}</code></html>"
+        // Plain text to avoid heavy HTML rendering
+        detailSnippet.text = "${item.filePath}:${item.lineNumber}  |  ${item.lineContent.trim()}"
     }
 
     private fun getEffectiveScope(): SearchScope {
@@ -266,17 +274,36 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         val methodFilter = if (selectedMethod == "All Methods") null else selectedMethod
         val scope = getEffectiveScope()
 
-        val results = indexService.search(query, methodFilter, scope)
+        val searchGen = ++currentSearchGeneration
 
-        listModel.clear()
-        results.forEach { listModel.addElement(it) }
+        // Perform search in background thread to avoid freezing EDT
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val results = try {
+                indexService.search(query, methodFilter, scope)
+            } catch (e: Exception) {
+                emptyList()
+            }
 
-        countLabel.text = "${results.size} route${if (results.size != 1) "s" else ""}"
+            // Deliver results back to EDT
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed || searchGen != currentSearchGeneration) {
+                    return@invokeLater
+                }
 
-        if (listModel.size() > 0) {
-            routesList.selectedIndex = 0
-        } else {
-            updateDetailPanel(null)
+                // Single atomic model replacement (zero layout spam)
+                val newModel = DefaultListModel<RouteItem>()
+                newModel.addAll(results)
+                routesList.model = newModel
+
+                countLabel.text = "${results.size} route${if (results.size != 1) "s" else ""}"
+
+                if (results.isNotEmpty()) {
+                    routesList.selectedIndex = 0
+                    routesList.ensureIndexIsVisible(0)
+                } else {
+                    updateDetailPanel(null)
+                }
+            }
         }
     }
 
@@ -308,9 +335,5 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
             searchField.text = initialQuery
         }
         searchField.requestFocusInWindow()
-    }
-
-    private fun escapeHtml(text: String): String {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     }
 }

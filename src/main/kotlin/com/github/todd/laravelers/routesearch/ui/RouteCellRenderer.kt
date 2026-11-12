@@ -2,6 +2,8 @@ package com.github.todd.laravelers.routesearch.ui
 
 import com.github.todd.laravelers.routesearch.model.RouteItem
 import com.intellij.ui.JBColor
+import com.intellij.ui.SimpleColoredComponent
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
@@ -20,8 +22,9 @@ import javax.swing.JPanel
 import javax.swing.ListCellRenderer
 
 /**
- * Custom renderer for displaying Laravel routes with colored method badges,
- * parameter highlighting, action details, and file locations.
+ * High-performance cell renderer for Laravel routes.
+ * Uses native SimpleColoredComponent (zero HTML parsing) for instantaneous,
+ * crash-free rendering even with thousands of routes.
  */
 class RouteCellRenderer : ListCellRenderer<RouteItem> {
 
@@ -31,19 +34,22 @@ class RouteCellRenderer : ListCellRenderer<RouteItem> {
     private val bottomRow = JPanel(BorderLayout(JBUI.scale(8), 0))
 
     private val methodBadge = MethodBadgeLabel()
-    private val uriLabel = JLabel()
+    private val uriComponent = SimpleColoredComponent()
     private val nameLabel = JLabel()
     private val actionLabel = JLabel()
     private val fileLabel = JLabel()
+
+    private val paramPattern = Regex("""\{[^/}]+\}""")
 
     init {
         panel.isOpaque = true
         topRow.isOpaque = false
         leftTop.isOpaque = false
         bottomRow.isOpaque = false
+        uriComponent.isOpaque = false
 
         leftTop.add(methodBadge, BorderLayout.WEST)
-        leftTop.add(uriLabel, BorderLayout.CENTER)
+        leftTop.add(uriComponent, BorderLayout.CENTER)
 
         topRow.add(leftTop, BorderLayout.CENTER)
         topRow.add(nameLabel, BorderLayout.EAST)
@@ -76,13 +82,11 @@ class RouteCellRenderer : ListCellRenderer<RouteItem> {
 
         if (isSelected) {
             panel.background = UIUtil.getListSelectionBackground(true)
-            uriLabel.foreground = UIUtil.getListSelectionForeground(true)
             nameLabel.foreground = UIUtil.getListSelectionForeground(true)
             actionLabel.foreground = UIUtil.getListSelectionForeground(true)
             fileLabel.foreground = UIUtil.getListSelectionForeground(true)
         } else {
             panel.background = if (index % 2 == 0) UIUtil.getListBackground() else UIUtil.getDecoratedRowColor()
-            uriLabel.foreground = UIUtil.getListForeground()
             nameLabel.foreground = JBColor(Color(110, 110, 110), Color(150, 150, 150))
             actionLabel.foreground = JBColor(Color(70, 70, 70), Color(180, 180, 180))
             fileLabel.foreground = JBColor(Color(130, 130, 130), Color(140, 140, 140))
@@ -91,9 +95,9 @@ class RouteCellRenderer : ListCellRenderer<RouteItem> {
         // Method Badge
         methodBadge.setMethod(value.method)
 
-        // URI with parameter highlight styling
-        uriLabel.text = formatUriHtml(value.normalizedUri, isSelected)
-        uriLabel.font = uriLabel.font.deriveFont(Font.BOLD, JBUI.scale(13).toFloat())
+        // Native URI rendering with variable parameter highlighting (Zero HTML)
+        uriComponent.clear()
+        renderUri(value.normalizedUri, isSelected)
 
         // Route Name
         if (!value.name.isNullOrBlank()) {
@@ -115,16 +119,30 @@ class RouteCellRenderer : ListCellRenderer<RouteItem> {
         return panel
     }
 
-    private fun formatUriHtml(uri: String, isSelected: Boolean): String {
-        val paramColor = if (isSelected) "#FFE082" else "#E65100"
-        val highlighted = uri.replace(Regex("""\{[^/}]+\}""")) { match ->
-            "<span style='color:$paramColor;'><b>${escapeHtml(match.value)}</b></span>"
+    private fun renderUri(uri: String, isSelected: Boolean) {
+        val baseAttr = if (isSelected) {
+            SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, UIUtil.getListSelectionForeground(true))
+        } else {
+            SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, UIUtil.getListForeground())
         }
-        return "<html>$highlighted</html>"
-    }
 
-    private fun escapeHtml(text: String): String {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        val paramAttr = if (isSelected) {
+            SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, Color(255, 238, 173))
+        } else {
+            SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, JBColor(Color(230, 81, 0), Color(255, 167, 38)))
+        }
+
+        var lastIdx = 0
+        for (match in paramPattern.findAll(uri)) {
+            if (match.range.first > lastIdx) {
+                uriComponent.append(uri.substring(lastIdx, match.range.first), baseAttr)
+            }
+            uriComponent.append(match.value, paramAttr)
+            lastIdx = match.range.last + 1
+        }
+        if (lastIdx < uri.length) {
+            uriComponent.append(uri.substring(lastIdx), baseAttr)
+        }
     }
 
     private class MethodBadgeLabel : JLabel() {

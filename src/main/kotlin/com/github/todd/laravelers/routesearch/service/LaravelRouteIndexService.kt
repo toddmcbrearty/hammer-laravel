@@ -3,8 +3,10 @@ package com.github.todd.laravelers.routesearch.service
 import com.github.todd.laravelers.routesearch.matcher.RoutePatternMatcher
 import com.github.todd.laravelers.routesearch.model.RouteItem
 import com.github.todd.laravelers.routesearch.parser.LaravelRouteParser
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.VfsUtil
@@ -34,12 +36,15 @@ class LaravelRouteIndexService(private val project: Project) {
             VirtualFileManager.VFS_CHANGES,
             object : BulkFileListener {
                 override fun after(events: List<VFileEvent>) {
+                    if (project.isDisposed) return
                     val affectsRoutes = events.any { event ->
                         val path = event.path
                         (path.endsWith(".php") && (path.contains("/routes/") || path.contains("\\routes\\")))
                     }
                     if (affectsRoutes) {
-                        refreshIndex()
+                        ApplicationManager.getApplication().executeOnPooledThread {
+                            refreshIndex()
+                        }
                     }
                 }
             }
@@ -47,23 +52,36 @@ class LaravelRouteIndexService(private val project: Project) {
     }
 
     /**
-     * Re-indexes the project's routes.
+     * Re-indexes the project's routes in a thread-safe, read-action-protected manner.
      */
     fun refreshIndex(scope: SearchScope = SearchScope.ROUTES_ONLY): List<RouteItem> {
+        if (project.isDisposed) return emptyList()
         val projectDir = project.guessProjectDir() ?: return emptyList()
-        val scannedRoutes = mutableListOf<RouteItem>()
+
+        if (!isIndexing.compareAndSet(false, true)) {
+            // Already indexing, return cached
+            return synchronized(cachedRoutes) { cachedRoutes.toList() }
+        }
 
         try {
-            val routeFiles = findRouteFiles(projectDir, scope)
-            for (file in routeFiles) {
-                try {
-                    val content = VfsUtil.loadText(file)
-                    val relativePath = VfsUtil.getRelativePath(file, projectDir) ?: file.name
-                    val fileRoutes = LaravelRouteParser.parse(content, file, relativePath)
-                    scannedRoutes.addAll(fileRoutes)
-                } catch (e: Exception) {
-                    LOG.warn("Failed to parse route file: ${file.path}", e)
+            val scannedRoutes = ApplicationManager.getApplication().runReadAction<List<RouteItem>> {
+                if (project.isDisposed) return@runReadAction emptyList()
+                val routeFiles = findRouteFiles(projectDir, scope)
+                val list = mutableListOf<RouteItem>()
+
+                for (file in routeFiles) {
+                    if (!file.isValid) continue
+                    try {
+                        val document = FileDocumentManager.getInstance().getDocument(file)
+                        val content = document?.text ?: VfsUtil.loadText(file)
+                        val relativePath = VfsUtil.getRelativePath(file, projectDir) ?: file.name
+                        val fileRoutes = LaravelRouteParser.parse(content, file, relativePath)
+                        list.addAll(fileRoutes)
+                    } catch (e: Exception) {
+                        LOG.warn("Failed to parse route file: ${file.path}", e)
+                    }
                 }
+                list
             }
 
             synchronized(cachedRoutes) {
@@ -71,11 +89,13 @@ class LaravelRouteIndexService(private val project: Project) {
                 cachedRoutes.addAll(scannedRoutes)
                 lastScannedTimestamp = System.currentTimeMillis()
             }
+            return scannedRoutes
         } catch (e: Exception) {
             LOG.error("Error indexing Laravel routes", e)
+            return synchronized(cachedRoutes) { cachedRoutes.toList() }
+        } finally {
+            isIndexing.set(false)
         }
-
-        return scannedRoutes
     }
 
     /**
@@ -83,11 +103,11 @@ class LaravelRouteIndexService(private val project: Project) {
      */
     fun getAllRoutes(scope: SearchScope = SearchScope.ROUTES_ONLY): List<RouteItem> {
         synchronized(cachedRoutes) {
-            if (cachedRoutes.isEmpty() && lastScannedTimestamp == 0L) {
-                return refreshIndex(scope)
+            if (cachedRoutes.isNotEmpty() || lastScannedTimestamp != 0L) {
+                return cachedRoutes.toList()
             }
-            return cachedRoutes.toList()
         }
+        return refreshIndex(scope)
     }
 
     /**
@@ -99,6 +119,7 @@ class LaravelRouteIndexService(private val project: Project) {
         methodFilter: String? = null,
         scope: SearchScope = SearchScope.ROUTES_ONLY
     ): List<RouteItem> {
+        if (project.isDisposed) return emptyList()
         val routes = getAllRoutes(scope)
         val trimmed = query.trim()
 
@@ -116,9 +137,13 @@ class LaravelRouteIndexService(private val project: Project) {
 
         val scoredResults = mutableListOf<Pair<RouteItem, Int>>()
         for (item in routes) {
-            val score = RoutePatternMatcher.match(item, queryWithEffectiveMethod)
-            if (score != null) {
-                scoredResults.add(item to score)
+            try {
+                val score = RoutePatternMatcher.match(item, queryWithEffectiveMethod)
+                if (score != null) {
+                    scoredResults.add(item to score)
+                }
+            } catch (e: Exception) {
+                // Ignore any matching error on a malformed item
             }
         }
 
@@ -141,9 +166,9 @@ class LaravelRouteIndexService(private val project: Project) {
                 collectPhpFiles(routesDir, files)
             }
 
-            // 2. Also search for any nested routes folders (e.g. app/Modules/*/routes or src/routes)
+            // 2. Search for any nested routes folders (e.g. app/Modules/*/routes or src/routes)
             projectDir.children?.forEach { child ->
-                if (child.isDirectory && child.name != "vendor" && child.name != "node_modules" && child.name != ".git") {
+                if (child.isDirectory && child.name != "vendor" && child.name != "node_modules" && child.name != ".git" && child.name != "storage") {
                     findSubRoutesFolders(child, files, depth = 1)
                 }
             }
