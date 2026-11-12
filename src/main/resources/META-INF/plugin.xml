@@ -1,0 +1,40 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.github.todd.laravelers</id>
+    <name>Laravelers</name>
+    <vendor>Todd</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Laravel Routes"
+                    secondary="true"
+                    icon="/icons/laravelers.svg"
+                    anchor="right"
+                    factoryClass="com.github.todd.laravelers.routesearch.ui.LaravelRoutesToolWindowFactory"/>
+    </extensions>
+
+    <actions>
+        <group id="com.github.todd.laravelers.Menu" text="Laravelers" popup="true" icon="/icons/laravelers.svg">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+
+            <action id="com.github.todd.laravelers.routesearch.SearchRoutesAction"
+                    class="com.github.todd.laravelers.routesearch.SearchRoutesAction"
+                    text="Search Laravel Routes..."
+                    description="Search Laravel routes with variable wildcard matching"
+                    icon="/icons/laravelers.svg">
+                <keyboard-shortcut keymap="$default" first-keystroke="control alt R"/>
+            </action>
+        </group>
+
+        <!-- Also add direct shortcut to Navigate Menu -->
+        <action id="com.github.todd.laravelers.routesearch.GoToRouteAction"
+                class="com.github.todd.laravelers.routesearch.SearchRoutesAction"
+                text="Laravel Route..."
+                description="Navigate to Laravel route definition"
+                icon="/icons/laravelers.svg">
+            <add-to-group group-id="GoToMenu" anchor="after" relative-to-action="GotoSymbol"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="shift alt R"/>
+        </action>
+    </actions>
+</idea-plugin>
