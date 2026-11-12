@@ -28,4 +28,33 @@ data class RouteItem(
      */
     val displayName: String
         get() = "$method $normalizedUri"
+
+    /**
+     * Whether the route action is an anonymous closure.
+     */
+    val isClosure: Boolean
+        get() = action?.contains("Closure", ignoreCase = true) == true
+
+    /**
+     * Name of the controller class, e.g. "UserController".
+     */
+    val controllerClass: String?
+        get() {
+            if (isClosure) return null
+            val act = action ?: return null
+            val rawClass = act.substringBefore('@').trim()
+            return rawClass.substringAfterLast('\\').takeIf { it.isNotEmpty() && it != "Closure" }
+        }
+
+    /**
+     * Name of the method/function within the controller, e.g. "edit" or "__invoke".
+     */
+    val controllerMethod: String?
+        get() {
+            if (isClosure) return null
+            val act = action ?: return null
+            if (!act.contains('@')) return "__invoke"
+            val rawMethod = act.substringAfter('@').trim()
+            return rawMethod.takeIf { it.isNotEmpty() } ?: "__invoke"
+        }
 }

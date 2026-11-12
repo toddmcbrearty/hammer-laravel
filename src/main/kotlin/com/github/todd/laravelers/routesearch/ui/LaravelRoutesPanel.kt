@@ -2,10 +2,10 @@ package com.github.todd.laravelers.routesearch.ui
 
 import com.github.todd.laravelers.routesearch.model.RouteItem
 import com.github.todd.laravelers.routesearch.service.LaravelRouteIndexService
+import com.github.todd.laravelers.routesearch.service.RouteNavigationService
 import com.github.todd.laravelers.routesearch.service.SearchScope
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -14,6 +14,8 @@ import com.intellij.ui.JBColor
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
+import javax.swing.JMenuItem
+import javax.swing.JPopupMenu
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -32,6 +34,7 @@ import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.ListSelectionModel
+import javax.swing.SwingUtilities
 import javax.swing.Timer
 
 class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) {
@@ -51,6 +54,7 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
     private val detailTitle = JBLabel("Select a route to view details")
     private val detailSnippet = JBLabel()
     private val jumpButton = JButton("Jump to Source", AllIcons.Actions.EditSource)
+    private val jumpFunctionButton = JButton("Jump to Function", AllIcons.Nodes.Method)
     private val copyButton = JButton("Copy URI", AllIcons.Actions.Copy)
 
     private val debounceTimer: Timer
@@ -120,7 +124,11 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
                         }
                     }
                     KeyEvent.VK_ENTER -> {
-                        openSelectedRoute()
+                        if (e.isShiftDown) {
+                            openSelectedFunction()
+                        } else {
+                            openSelectedRoute()
+                        }
                         e.consume()
                     }
                 }
@@ -191,17 +199,37 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
 
         routesList.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
-                if (e.clickCount == 2) {
-                    openSelectedRoute()
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    val index = routesList.locationToIndex(e.point)
+                    if (index != -1) {
+                        routesList.selectedIndex = index
+                        showContextMenu(e)
+                    }
+                } else if (e.clickCount == 2) {
+                    if (e.isMetaDown || e.isControlDown) {
+                        openSelectedFunction()
+                    } else {
+                        openSelectedRoute()
+                    }
                 }
             }
         })
 
         routesList.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
-                if (e.keyCode == KeyEvent.VK_ENTER) {
-                    openSelectedRoute()
-                    e.consume()
+                when {
+                    e.keyCode == KeyEvent.VK_ENTER && e.isShiftDown -> {
+                        openSelectedFunction()
+                        e.consume()
+                    }
+                    e.keyCode == KeyEvent.VK_ENTER -> {
+                        openSelectedRoute()
+                        e.consume()
+                    }
+                    (e.keyCode == KeyEvent.VK_B && (e.isMetaDown || e.isControlDown)) -> {
+                        openSelectedFunction()
+                        e.consume()
+                    }
                 }
             }
         })
@@ -210,6 +238,51 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
             val selected = routesList.selectedValue
             updateDetailPanel(selected)
         }
+    }
+
+    private fun showContextMenu(e: MouseEvent) {
+        val selected = routesList.selectedValue ?: return
+        val menu = JPopupMenu()
+
+        val jumpFunctionItem = JMenuItem("Jump to Function", AllIcons.Nodes.Method).apply {
+            isEnabled = !selected.controllerClass.isNullOrBlank() || selected.isClosure
+            addActionListener { openSelectedFunction() }
+        }
+        menu.add(jumpFunctionItem)
+
+        val jumpSourceItem = JMenuItem("Jump to Route Source", AllIcons.Actions.EditSource).apply {
+            addActionListener { openSelectedRoute() }
+        }
+        menu.add(jumpSourceItem)
+
+        menu.addSeparator()
+
+        val copyUriItem = JMenuItem("Copy URI", AllIcons.Actions.Copy).apply {
+            addActionListener {
+                CopyPasteManager.getInstance().setContents(StringSelection(selected.normalizedUri))
+            }
+        }
+        menu.add(copyUriItem)
+
+        if (!selected.name.isNullOrBlank()) {
+            val copyNameItem = JMenuItem("Copy Route Name").apply {
+                addActionListener {
+                    CopyPasteManager.getInstance().setContents(StringSelection(selected.name))
+                }
+            }
+            menu.add(copyNameItem)
+        }
+
+        if (!selected.action.isNullOrBlank()) {
+            val copyActionItem = JMenuItem("Copy Action").apply {
+                addActionListener {
+                    CopyPasteManager.getInstance().setContents(StringSelection(selected.action))
+                }
+            }
+            menu.add(copyActionItem)
+        }
+
+        menu.show(routesList, e.x, e.y)
     }
 
     private fun setupDetailPanel() {
@@ -235,9 +308,15 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         buttonsPanel.isOpaque = false
 
         jumpButton.isFocusable = false
+        jumpButton.toolTipText = "Jump to route definition in routes file (Enter)"
         jumpButton.addActionListener { openSelectedRoute() }
 
+        jumpFunctionButton.isFocusable = false
+        jumpFunctionButton.toolTipText = "Jump to controller function or closure (Shift+Enter or Cmd+B)"
+        jumpFunctionButton.addActionListener { openSelectedFunction() }
+
         copyButton.isFocusable = false
+        copyButton.toolTipText = "Copy URI to clipboard"
         copyButton.addActionListener {
             val selected = routesList.selectedValue
             if (selected != null) {
@@ -247,6 +326,7 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
 
         buttonsPanel.add(copyButton)
         buttonsPanel.add(jumpButton)
+        buttonsPanel.add(jumpFunctionButton)
 
         detailPanel.add(textContainer, BorderLayout.CENTER)
         detailPanel.add(buttonsPanel, BorderLayout.EAST)
@@ -260,8 +340,27 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         }
         detailPanel.isVisible = true
         detailTitle.text = "${item.method} ${item.normalizedUri}" + if (!item.name.isNullOrBlank()) " (${item.name})" else ""
-        // Plain text to avoid heavy HTML rendering
         detailSnippet.text = "${item.filePath}:${item.lineNumber}  |  ${item.lineContent.trim()}"
+
+        // Update Jump to Function button state and tooltip
+        when {
+            item.isClosure -> {
+                jumpFunctionButton.text = "Jump to Closure"
+                jumpFunctionButton.toolTipText = "Jump to closure definition in ${item.filePath}"
+                jumpFunctionButton.isEnabled = true
+            }
+            !item.controllerClass.isNullOrBlank() -> {
+                val methodDisplay = if (!item.controllerMethod.isNullOrBlank()) "${item.controllerClass}::${item.controllerMethod}()" else item.controllerClass
+                jumpFunctionButton.text = "Jump to Function"
+                jumpFunctionButton.toolTipText = "Jump to $methodDisplay"
+                jumpFunctionButton.isEnabled = true
+            }
+            else -> {
+                jumpFunctionButton.text = "Jump to Function"
+                jumpFunctionButton.toolTipText = "No controller associated with this route"
+                jumpFunctionButton.isEnabled = false
+            }
+        }
     }
 
     private fun getEffectiveScope(): SearchScope {
@@ -309,22 +408,12 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
 
     private fun openSelectedRoute() {
         val selected = routesList.selectedValue ?: return
-        openRouteInEditor(selected)
+        RouteNavigationService.jumpToRouteDefinition(project, selected)
     }
 
-    private fun openRouteInEditor(item: RouteItem) {
-        val file = item.file
-        if (!file.isValid) return
-
-        val descriptor = OpenFileDescriptor(
-            project,
-            file,
-            (item.lineNumber - 1).coerceAtLeast(0),
-            0
-        )
-        if (descriptor.canNavigate()) {
-            descriptor.navigate(true)
-        }
+    private fun openSelectedFunction() {
+        val selected = routesList.selectedValue ?: return
+        RouteNavigationService.jumpToFunction(project, selected)
     }
 
     /**
