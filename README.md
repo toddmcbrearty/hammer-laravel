@@ -29,17 +29,21 @@ When searching for routes, you often know the path structure but not the exact p
 - **Color-Coded Method Badges**: Visual badges for `GET` (green), `POST` (blue), `PUT`/`PATCH` (orange), `DELETE` (red), `ANY` (purple).
 - **Interactive Filtering**: Filter by HTTP method dropdown (GET, POST, PUT, DELETE, etc.) and search scope (`routes/**/*.php` vs entire project).
 - **Code Preview & Details**: Selected route displays full URI, route name, action, and code snippet with line numbers.
-- **Instant Source Navigation**: Double-click or press `Enter` to jump directly to the route definition line and file in PhpStorm.
+- **Jump to Function Button**: One-click navigation directly to the controller PHP file and method definition (e.g. `UserController::edit()`), or directly to the closure declaration.
+- **Instant Source Navigation**: Jump to the route definition line in the route file (`routes/web.php`).
+- **Context Menu & Shortcuts**: Right-click context menu, `Enter` to jump to source, `Shift+Enter` or `Cmd+B` / `Ctrl+B` to jump directly to the controller method.
 - **Live File Watcher**: Automatically refreshes when route files are edited or added.
 
 ---
 
-## Keyboard Shortcuts
+## Keyboard Shortcuts & Navigation
 
-| Action | Shortcut (macOS / Win / Linux) | Menu Location |
+| Action | Shortcut (macOS / Win / Linux) | Location / Context |
 | :--- | :--- | :--- |
-| **Search Laravel Routes** | `Shift + Alt + R` | **Navigate** → **Laravel Route...** |
-| **Open Routes Tool Window** | `Ctrl + Alt + R` | **Tools** → **Laravelers** → **Search Laravel Routes...** |
+| **Search Laravel Routes** | `Shift + Alt + R` | Global: **Navigate** → **Laravel Route...** |
+| **Open Routes Tool Window** | `Ctrl + Alt + R` | Global: **Tools** → **Laravelers** → **Search Laravel Routes...** |
+| **Jump to Function / Method** | `Shift + Enter` or `Cmd + B` / `Ctrl + B` | Inside Routes Panel (or click "Jump to Function") |
+| **Jump to Route Source** | `Enter` or Double-click | Inside Routes Panel (or click "Jump to Source") |
 
 *(If text is selected in the editor when triggering the shortcut, it automatically pre-populates the search query!)*
 
