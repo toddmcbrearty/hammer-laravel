@@ -42,14 +42,14 @@ kotlin {
 
 intellijPlatform {
     pluginConfiguration {
-        id = "com.github.todd.laravelers"
-        name = "Laravelers"
+        id = "com.github.todd.hammerlaravel"
+        name = "Hammer Laravel"
         version = project.version.toString()
         vendor {
             name = "Todd"
         }
         description = """
-            Laravelers - Developer toolkit for Laravel in PhpStorm.
+            Hammer Laravel - Developer toolkit for Laravel in PhpStorm.
             Features intelligent route search with wildcard parameter matching ({}),
             dockable tool window, keyboard shortcuts, and instant file navigation.
         """.trimIndent()

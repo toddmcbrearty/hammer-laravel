@@ -15,5 +15,7 @@ class LaravelRoutesToolWindowFactory : ToolWindowFactory, DumbAware {
         toolWindow.contentManager.addContent(content)
     }
 
-    override fun shouldBeAvailable(project: Project): Boolean = true
+    override fun shouldBeAvailable(project: Project): Boolean {
+        return com.github.todd.laravelers.routesearch.service.LaravelRouteIndexService.getInstance(project).hasLaravelRoutes()
+    }
 }

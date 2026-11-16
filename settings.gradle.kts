@@ -1,4 +1,4 @@
-rootProject.name = "laravelers"
+rootProject.name = "hammer-laravel"
 
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"

@@ -113,4 +113,56 @@ class RoutePatternMatcherTest {
         assertTrue(RoutePatternMatcher.matchesUri("/go/to/{user:slug}/edit", "go/to/{}/edit"))
         assertFalse(RoutePatternMatcher.matchesUri("/go/to/view", "/go/to/{}/edit"))
     }
+
+    @Test
+    fun `test matches concrete path with numeric id against parameter route`() {
+        // Requirement: pasting admin/company/188/accounts finds admin/company/{}/accounts
+        val query = RoutePatternMatcher.parseQuery("admin/company/188/accounts")
+
+        val matchPlaceholder = createItem("GET", "admin/company/{}/accounts")
+        val matchNamedParam = createItem("GET", "admin/company/{company}/accounts")
+        val matchIdParam = createItem("GET", "/admin/company/{id}/accounts")
+        val matchOptionalParam = createItem("GET", "admin/company/{company}/accounts/{tab?}")
+
+        assertNotNull(RoutePatternMatcher.match(matchPlaceholder, query))
+        assertNotNull(RoutePatternMatcher.match(matchNamedParam, query))
+        assertNotNull(RoutePatternMatcher.match(matchIdParam, query))
+        assertNotNull(RoutePatternMatcher.match(matchOptionalParam, query))
+
+        // matchesUri helper check
+        assertTrue(RoutePatternMatcher.matchesUri("admin/company/{}/accounts", "admin/company/188/accounts"))
+        assertTrue(RoutePatternMatcher.matchesUri("/admin/company/{company}/accounts", "admin/company/188/accounts"))
+        assertTrue(RoutePatternMatcher.matchesUriExact("admin/company/{}/accounts", "admin/company/188/accounts"))
+
+        // Non-matches
+        val differentPath = createItem("GET", "admin/company/{}/settings")
+        val differentPrefix = createItem("GET", "admin/users/{}/accounts")
+        assertNull(RoutePatternMatcher.match(differentPath, query))
+        assertNull(RoutePatternMatcher.match(differentPrefix, query))
+    }
+
+    @Test
+    fun `test matches concrete path from full url with domain and query params`() {
+        val query = RoutePatternMatcher.parseQuery("https://app.test/admin/company/188/accounts?tab=billing#overview")
+        val item = createItem("GET", "admin/company/{}/accounts")
+
+        assertNotNull(RoutePatternMatcher.match(item, query))
+    }
+
+    @Test
+    fun `test concrete path prefix and subpath matching`() {
+        val fullRoute = createItem("GET", "/admin/company/{}/accounts")
+
+        // Prefix match: admin/company/188
+        val prefixQuery = RoutePatternMatcher.parseQuery("admin/company/188")
+        assertNotNull(RoutePatternMatcher.match(fullRoute, prefixQuery))
+
+        // Subpath match: company/188/accounts
+        val subpathQuery = RoutePatternMatcher.parseQuery("company/188/accounts")
+        assertNotNull(RoutePatternMatcher.match(fullRoute, subpathQuery))
+
+        // Lone numeric ID without any literal route context should not match
+        val loneNumberQuery = RoutePatternMatcher.parseQuery("188")
+        assertNull(RoutePatternMatcher.match(fullRoute, loneNumberQuery))
+    }
 }

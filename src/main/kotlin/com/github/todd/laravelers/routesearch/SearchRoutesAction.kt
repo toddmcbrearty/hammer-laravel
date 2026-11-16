@@ -28,6 +28,12 @@ class SearchRoutesAction : AnAction(), DumbAware {
     }
 
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabledAndVisible = (e.project != null)
+        val project = e.project
+        if (project == null || project.isDisposed) {
+            e.presentation.isEnabledAndVisible = false
+            return
+        }
+        val hasRoutes = com.github.todd.laravelers.routesearch.service.LaravelRouteIndexService.getInstance(project).hasLaravelRoutes()
+        e.presentation.isEnabledAndVisible = hasRoutes
     }
 }

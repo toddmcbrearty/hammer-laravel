@@ -1,4 +1,4 @@
-# Laravelers Plugin for PhpStorm
+# Hammer Laravel Plugin for PhpStorm
 
 A developer toolkit for Laravel applications in PhpStorm and IntelliJ Platform IDEs.
 
@@ -18,6 +18,7 @@ When searching for routes, you often know the path structure but not the exact p
   - Supports multiple wildcards, e.g. `/orgs/{}/teams/{}/members`.
 
 ### Additional Search Capabilities
+- **Paste Real URLs & Paths with IDs**: Directly paste concrete paths or URLs like `admin/company/188/accounts` or `https://app.test/admin/company/188/accounts?tab=billing` — automatically matches route definitions containing parameter placeholders like `admin/company/{}/accounts`, `admin/company/{company}/accounts`, or `admin/company/{id}/accounts`.
 - **Named Variable Search**: `/users/{id}` specifically matches parameters containing `id` (e.g. `{id}`, `{userId}`, `{id?}`).
 - **HTTP Method Prefix**: Prefix your search with any HTTP verb like `POST /users` or `DELETE /go/to/{}`.
 - **Route Name Search**: Type route names directly, e.g. `users.index`, `admin.dashboard`.
@@ -28,10 +29,10 @@ When searching for routes, you often know the path structure but not the exact p
 - **Right Sidebar Panel**: Dockable "Laravel Routes" tool window.
 - **Color-Coded Method Badges**: Visual badges for `GET` (green), `POST` (blue), `PUT`/`PATCH` (orange), `DELETE` (red), `ANY` (purple).
 - **Interactive Filtering**: Filter by HTTP method dropdown (GET, POST, PUT, DELETE, etc.) and search scope (`routes/**/*.php` vs entire project).
-- **Code Preview & Details**: Selected route displays full URI, route name, action, and code snippet with line numbers.
-- **Jump to Function Button**: One-click navigation directly to the controller PHP file and method definition (e.g. `UserController::edit()`), or directly to the closure declaration.
+- **Inline Action Icon Buttons**: Every list item includes compact icon buttons for **Jump to Route** (route definition in route files) and **Jump to Source / Function** (controller method or closure) with hover feedback and tooltips for instant one-click navigation right from the list.
 - **Instant Source Navigation**: Jump to the route definition line in the route file (`routes/web.php`).
 - **Context Menu & Shortcuts**: Right-click context menu, `Enter` to jump to source, `Shift+Enter` or `Cmd+B` / `Ctrl+B` to jump directly to the controller method.
+- **Smart Conditional Visibility**: The tool window and menu actions only appear in PhpStorm when the open project actually contains Laravel route definitions.
 - **Live File Watcher**: Automatically refreshes when route files are edited or added.
 
 ---
@@ -41,7 +42,7 @@ When searching for routes, you often know the path structure but not the exact p
 | Action | Shortcut (macOS / Win / Linux) | Location / Context |
 | :--- | :--- | :--- |
 | **Search Laravel Routes** | `Shift + Alt + R` | Global: **Navigate** → **Laravel Route...** |
-| **Open Routes Tool Window** | `Ctrl + Alt + R` | Global: **Tools** → **Laravelers** → **Search Laravel Routes...** |
+| **Open Routes Tool Window** | `Ctrl + Alt + R` | Global: **Tools** → **Hammer Laravel** → **Search Laravel Routes...** |
 | **Jump to Function / Method** | `Shift + Enter` or `Cmd + B` / `Ctrl + B` | Inside Routes Panel (or click "Jump to Function") |
 | **Jump to Route Source** | `Enter` or Double-click | Inside Routes Panel (or click "Jump to Source") |
 
@@ -52,7 +53,7 @@ When searching for routes, you often know the path structure but not the exact p
 ## Project Structure & Architecture
 
 ```
-laravelers/
+hammer-laravel/
 ├── build.gradle.kts
 ├── settings.gradle.kts
 ├── gradle.properties
@@ -64,8 +65,8 @@ laravelers/
 │   │   │   │   ├── pluginIcon.svg
 │   │   │   │   └── pluginIcon_dark.svg
 │   │   │   └── icons/
-│   │   │       ├── laravelers.svg
-│   │   │       └── laravelers_dark.svg
+│   │   │       ├── hammerLaravel.svg
+│   │   │       └── hammerLaravel_dark.svg
 │   │   └── kotlin/com/github/todd/laravelers/
 │   │       └── routesearch/
 │   │           ├── model/
@@ -115,7 +116,7 @@ The repository is modularly structured so that new Laravel-specific tools can be
 ```
 The installable ZIP is created at:
 ```
-build/distributions/laravelers-1.0.0.zip
+build/distributions/hammer-laravel-1.0.0.zip
 ```
 Install it in PhpStorm via:
 **Settings** → **Plugins** → ⚙️ (Gear Icon) → **Install Plugin from Disk...**

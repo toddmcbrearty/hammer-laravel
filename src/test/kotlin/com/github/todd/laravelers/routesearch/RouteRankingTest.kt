@@ -33,4 +33,16 @@ class RouteRankingTest {
 
         assertTrue(exactScore > subpathScore, "Exact match score ($exactScore) should be higher than subpath score ($subpathScore)")
     }
+
+    @Test
+    fun `test concrete path exact match ranks higher than subpath or child route`() {
+        val query = RoutePatternMatcher.parseQuery("admin/company/188/accounts")
+        val exactItem = createItem("admin/company/{}/accounts")
+        val childItem = createItem("admin/company/{}/accounts/details")
+
+        val exactScore = RoutePatternMatcher.match(exactItem, query) ?: 0
+        val childScore = RoutePatternMatcher.match(childItem, query) ?: 0
+
+        assertTrue(exactScore > childScore, "Exact structural match score ($exactScore) should be higher than child route score ($childScore)")
+    }
 }

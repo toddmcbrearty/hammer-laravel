@@ -44,11 +44,56 @@ class LaravelRouteIndexService(private val project: Project) {
                     if (affectsRoutes) {
                         ApplicationManager.getApplication().executeOnPooledThread {
                             refreshIndex()
+                            updateToolWindowAvailability()
                         }
                     }
                 }
             }
         )
+    }
+
+    /**
+     * Quickly checks whether the project contains any Laravel route definitions.
+     * Checks cached routes first; if not scanned yet, performs a fast check of route files.
+     */
+    fun hasLaravelRoutes(): Boolean {
+        if (project.isDisposed) return false
+        synchronized(cachedRoutes) {
+            if (cachedRoutes.isNotEmpty()) return true
+            if (lastScannedTimestamp != 0L) return false
+        }
+
+        val projectDir = project.guessProjectDir() ?: return false
+        return ApplicationManager.getApplication().runReadAction<Boolean> {
+            val routeFiles = findRouteFiles(projectDir, SearchScope.ROUTES_ONLY)
+            for (file in routeFiles) {
+                if (!file.isValid) continue
+                try {
+                    val document = FileDocumentManager.getInstance().getDocument(file)
+                    val content = document?.text ?: VfsUtil.loadText(file)
+                    val parsed = LaravelRouteParser.parse(content, file, file.name)
+                    if (parsed.isNotEmpty()) return@runReadAction true
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+            false
+        }
+    }
+
+    /**
+     * Updates the ToolWindow availability in PhpStorm.
+     */
+    fun updateToolWindowAvailability() {
+        if (project.isDisposed) return
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+            val toolWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow("Laravel Routes") ?: return@invokeLater
+            val available = hasLaravelRoutes()
+            if (toolWindow.isAvailable != available) {
+                toolWindow.isAvailable = available
+            }
+        }
     }
 
     /**

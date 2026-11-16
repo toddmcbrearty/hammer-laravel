@@ -27,9 +27,6 @@ import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.BorderFactory
-import javax.swing.Box
-import javax.swing.BoxLayout
 import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JPanel
@@ -46,16 +43,10 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
     private val scopeCombo = ComboBox(arrayOf("Routes Folder", "All PHP Files"))
     private val refreshButton = JButton(AllIcons.Actions.Refresh)
     private val countLabel = JBLabel("0 routes")
-
-    private val routesList = JBList<RouteItem>()
-
-    // Preview / Details panel
-    private val detailPanel = JPanel(BorderLayout(JBUI.scale(8), JBUI.scale(4)))
-    private val detailTitle = JBLabel("Select a route to view details")
-    private val detailSnippet = JBLabel()
-    private val jumpButton = JButton("Jump to Source", AllIcons.Actions.EditSource)
-    private val jumpFunctionButton = JButton("Jump to Function", AllIcons.Nodes.Method)
-    private val copyButton = JButton("Copy URI", AllIcons.Actions.Copy)
+    private val cellRenderer = RouteCellRenderer()
+    private val routesList = object : JBList<RouteItem>() {
+        override fun getScrollableTracksViewportWidth(): Boolean = true
+    }
 
     private val debounceTimer: Timer
     private var currentSearchGeneration = 0
@@ -68,7 +59,6 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
 
         setupHeader()
         setupList()
-        setupDetailPanel()
 
         // Assemble Layout
         val topContainer = JPanel(BorderLayout())
@@ -76,8 +66,10 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         topContainer.add(createFiltersToolbar(), BorderLayout.SOUTH)
 
         add(topContainer, BorderLayout.NORTH)
-        add(JBScrollPane(routesList), BorderLayout.CENTER)
-        add(detailPanel, BorderLayout.SOUTH)
+        val scrollPane = JBScrollPane(routesList).apply {
+            horizontalScrollBarPolicy = javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
+        }
+        add(scrollPane, BorderLayout.CENTER)
 
         // Initial scan in background
         ApplicationManager.getApplication().executeOnPooledThread {
@@ -94,7 +86,7 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         val panel = JPanel(BorderLayout(JBUI.scale(6), 0))
         panel.border = JBUI.Borders.empty(8, 8, 4, 8)
 
-        searchField.textEditor.emptyText.text = "Search routes (e.g. /go/to/{}/edit, {id}, users)..."
+        searchField.textEditor.emptyText.text = "Search routes (e.g. admin/company/188/accounts, /go/to/{}/edit)..."
 
         searchField.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
@@ -193,11 +185,49 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
     }
 
     private fun setupList() {
-        routesList.cellRenderer = RouteCellRenderer()
+        routesList.cellRenderer = cellRenderer
         routesList.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        routesList.emptyText.text = "No routes found matching query. Try typing /go/to/{}/edit"
+        routesList.emptyText.text = "No routes found matching query. Try typing /go/to/{}/edit or pasting a URL/path"
 
         routesList.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    val index = routesList.locationToIndex(e.point)
+                    if (index >= 0 && index < routesList.model.size) {
+                        val bounds = routesList.getCellBounds(index, index)
+                        if (bounds != null && bounds.contains(e.point)) {
+                            val relX = e.x - bounds.x
+                            val relY = e.y - bounds.y
+                            val item = routesList.model.getElementAt(index)
+                            val clicked = cellRenderer.getClickedButton(
+                                routesList,
+                                bounds.width,
+                                bounds.height,
+                                relX,
+                                relY,
+                                item,
+                                routesList.selectedIndex == index
+                            )
+                            when (clicked) {
+                                CellActionButton.SOURCE -> {
+                                    routesList.selectedIndex = index
+                                    RouteNavigationService.jumpToRouteDefinition(project, item)
+                                    e.consume()
+                                    return
+                                }
+                                CellActionButton.FUNCTION -> {
+                                    routesList.selectedIndex = index
+                                    RouteNavigationService.jumpToFunction(project, item)
+                                    e.consume()
+                                    return
+                                }
+                                CellActionButton.NONE -> {}
+                            }
+                        }
+                    }
+                }
+            }
+
             override fun mouseClicked(e: MouseEvent) {
                 if (SwingUtilities.isRightMouseButton(e)) {
                     val index = routesList.locationToIndex(e.point)
@@ -212,6 +242,56 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
                         openSelectedRoute()
                     }
                 }
+            }
+
+            override fun mouseExited(e: MouseEvent) {
+                clearButtonHover()
+            }
+        })
+
+        routesList.addMouseMotionListener(object : java.awt.event.MouseMotionAdapter() {
+            override fun mouseMoved(e: MouseEvent) {
+                val index = routesList.locationToIndex(e.point)
+                if (index >= 0 && index < routesList.model.size) {
+                    val bounds = routesList.getCellBounds(index, index)
+                    if (bounds != null && bounds.contains(e.point)) {
+                        val relX = e.x - bounds.x
+                        val relY = e.y - bounds.y
+                        val item = routesList.model.getElementAt(index)
+                        val clicked = cellRenderer.getClickedButton(
+                            routesList,
+                            bounds.width,
+                            bounds.height,
+                            relX,
+                            relY,
+                            item,
+                            routesList.selectedIndex == index
+                        )
+                        if (clicked != CellActionButton.NONE) {
+                            routesList.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+                            if (cellRenderer.hoveredIndex != index || cellRenderer.hoveredButton != clicked) {
+                                val oldIndex = cellRenderer.hoveredIndex
+                                cellRenderer.hoveredIndex = index
+                                cellRenderer.hoveredButton = clicked
+                                if (oldIndex >= 0 && oldIndex < routesList.model.size) {
+                                    routesList.getCellBounds(oldIndex, oldIndex)?.let { routesList.repaint(it) }
+                                }
+                                routesList.repaint(bounds)
+                            }
+                            routesList.toolTipText = when (clicked) {
+                                CellActionButton.SOURCE -> "Jump to route definition in ${item.filePath}:${item.lineNumber}"
+                                CellActionButton.FUNCTION -> if (item.isClosure) "Jump to closure definition in ${item.filePath}" else "Jump to ${item.controllerClass}::${item.controllerMethod}()"
+                                CellActionButton.NONE -> null
+                            }
+                            return
+                        } else {
+                            clearButtonHover()
+                            routesList.toolTipText = "${item.method} ${item.normalizedUri}" + if (!item.name.isNullOrBlank()) " (${item.name})" else ""
+                            return
+                        }
+                    }
+                }
+                clearButtonHover()
             }
         })
 
@@ -233,10 +313,18 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
                 }
             }
         })
+    }
 
-        routesList.addListSelectionListener {
-            val selected = routesList.selectedValue
-            updateDetailPanel(selected)
+    private fun clearButtonHover() {
+        if (cellRenderer.hoveredButton != CellActionButton.NONE) {
+            val oldIndex = cellRenderer.hoveredIndex
+            cellRenderer.hoveredIndex = -1
+            cellRenderer.hoveredButton = CellActionButton.NONE
+            if (oldIndex >= 0 && oldIndex < routesList.model.size) {
+                routesList.getCellBounds(oldIndex, oldIndex)?.let { routesList.repaint(it) }
+            }
+            routesList.cursor = java.awt.Cursor.getDefaultCursor()
+            routesList.toolTipText = null
         }
     }
 
@@ -285,84 +373,6 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         menu.show(routesList, e.x, e.y)
     }
 
-    private fun setupDetailPanel() {
-        detailPanel.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(1, 0, 0, 0, JBColor.border()),
-            JBUI.Borders.empty(8, 10)
-        )
-        detailPanel.background = UIUtil.getPanelBackground()
-
-        val textContainer = JPanel()
-        textContainer.layout = BoxLayout(textContainer, BoxLayout.Y_AXIS)
-        textContainer.isOpaque = false
-
-        detailTitle.font = detailTitle.font.deriveFont(Font.BOLD, JBUI.scale(12).toFloat())
-        detailSnippet.font = detailSnippet.font.deriveFont(Font.PLAIN, JBUI.scale(11).toFloat())
-        detailSnippet.foreground = JBColor.GRAY
-
-        textContainer.add(detailTitle)
-        textContainer.add(Box.createVerticalStrut(JBUI.scale(3)))
-        textContainer.add(detailSnippet)
-
-        val buttonsPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0))
-        buttonsPanel.isOpaque = false
-
-        jumpButton.isFocusable = false
-        jumpButton.toolTipText = "Jump to route definition in routes file (Enter)"
-        jumpButton.addActionListener { openSelectedRoute() }
-
-        jumpFunctionButton.isFocusable = false
-        jumpFunctionButton.toolTipText = "Jump to controller function or closure (Shift+Enter or Cmd+B)"
-        jumpFunctionButton.addActionListener { openSelectedFunction() }
-
-        copyButton.isFocusable = false
-        copyButton.toolTipText = "Copy URI to clipboard"
-        copyButton.addActionListener {
-            val selected = routesList.selectedValue
-            if (selected != null) {
-                CopyPasteManager.getInstance().setContents(StringSelection(selected.normalizedUri))
-            }
-        }
-
-        buttonsPanel.add(copyButton)
-        buttonsPanel.add(jumpButton)
-        buttonsPanel.add(jumpFunctionButton)
-
-        detailPanel.add(textContainer, BorderLayout.CENTER)
-        detailPanel.add(buttonsPanel, BorderLayout.EAST)
-        detailPanel.isVisible = false
-    }
-
-    private fun updateDetailPanel(item: RouteItem?) {
-        if (item == null) {
-            detailPanel.isVisible = false
-            return
-        }
-        detailPanel.isVisible = true
-        detailTitle.text = "${item.method} ${item.normalizedUri}" + if (!item.name.isNullOrBlank()) " (${item.name})" else ""
-        detailSnippet.text = "${item.filePath}:${item.lineNumber}  |  ${item.lineContent.trim()}"
-
-        // Update Jump to Function button state and tooltip
-        when {
-            item.isClosure -> {
-                jumpFunctionButton.text = "Jump to Closure"
-                jumpFunctionButton.toolTipText = "Jump to closure definition in ${item.filePath}"
-                jumpFunctionButton.isEnabled = true
-            }
-            !item.controllerClass.isNullOrBlank() -> {
-                val methodDisplay = if (!item.controllerMethod.isNullOrBlank()) "${item.controllerClass}::${item.controllerMethod}()" else item.controllerClass
-                jumpFunctionButton.text = "Jump to Function"
-                jumpFunctionButton.toolTipText = "Jump to $methodDisplay"
-                jumpFunctionButton.isEnabled = true
-            }
-            else -> {
-                jumpFunctionButton.text = "Jump to Function"
-                jumpFunctionButton.toolTipText = "No controller associated with this route"
-                jumpFunctionButton.isEnabled = false
-            }
-        }
-    }
-
     private fun getEffectiveScope(): SearchScope {
         return if (scopeCombo.selectedIndex == 1) SearchScope.ALL_PHP else SearchScope.ROUTES_ONLY
     }
@@ -399,8 +409,6 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
                 if (results.isNotEmpty()) {
                     routesList.selectedIndex = 0
                     routesList.ensureIndexIsVisible(0)
-                } else {
-                    updateDetailPanel(null)
                 }
             }
         }
