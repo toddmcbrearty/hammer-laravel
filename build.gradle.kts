@@ -49,9 +49,21 @@ intellijPlatform {
             name = "Todd"
         }
         description = """
-            Hammer Laravel - Developer toolkit for Laravel in PhpStorm.
-            Features intelligent route search with wildcard parameter matching ({}),
-            dockable tool window, keyboard shortcuts, and instant file navigation.
+            <h3>Hammer Laravel</h3>
+            <p>
+                A high-performance developer toolkit designed specifically for Laravel development in PhpStorm and IntelliJ Platform IDEs. It provides purpose-built tools that streamline navigating and working with Laravel codebases, starting with an <b>Intelligent Route Search and Navigation engine</b>.
+            </p>
+            <p>
+                Locating route definitions in large Laravel applications can be frustrating when URLs contain dynamic parameters, controller aliases, or route prefixes spread across multiple files. Hammer Laravel solves this by introducing intuitive <b>wildcard parameter matching (<code>{}</code>)</b>, allowing developers to search for routes like <code>/users/{}/edit</code> or paste real-world URLs directly to jump instantly to route definitions or controller actions.
+            </p>
+            <h4>Key Features:</h4>
+            <ul>
+                <li><b>Wildcard Parameter Search (<code>{}</code>):</b> Type <code>/go/to/{}/edit</code> to match <code>{id}</code>, <code>{user}</code>, <code>{slug}</code>, etc.</li>
+                <li><b>Paste Real URLs:</b> Paste concrete browser URLs like <code>admin/company/188/accounts</code> to find matching route templates.</li>
+                <li><b>Jump to Route & Jump to Function:</b> Jump instantly to route file definitions (<kbd>Enter</kbd>) or controller methods/closures (<kbd>Cmd+B</kbd> / <kbd>Shift+Enter</kbd>).</li>
+                <li><b>Color-Coded HTTP Badges:</b> Visual method badges for GET, POST, PUT, DELETE, and ANY with method filtering.</li>
+                <li><b>Dockable Tool Window:</b> Right sidebar panel with live file watcher that auto-indexes routes as you code.</li>
+            </ul>
         """.trimIndent()
         changeNotes = """
             Initial release of Hammer Laravel.
