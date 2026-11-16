@@ -10,6 +10,14 @@ A developer toolkit for Laravel applications in PhpStorm and IntelliJ Platform I
 
 Locating route definitions in large Laravel applications can be frustrating when URLs contain dynamic parameters, controller aliases, or route prefixes spread across multiple files. Hammer Laravel solves this by introducing intuitive wildcard parameter matching (`{}`), allowing developers to search for routes like `/users/{}/edit` or paste real-world URLs directly to jump instantly to route definitions or controller actions. With dockable sidebar panels, keyboard-first navigation, and real-time route file indexing, Hammer Laravel eliminates guesswork and accelerates day-to-day Laravel workflows.
 
+### Quick Keyboard Shortcuts
+| Action | macOS | Windows / Linux | Location / Context |
+| :--- | :--- | :--- | :--- |
+| **Search Laravel Routes** | `Shift + Option + R` | `Shift + Alt + R` | Global: **Navigate** → **Laravel Route...** |
+| **Open Routes Tool Window** | `Ctrl + Option + R` | `Ctrl + Alt + R` | Global: **Tools** → **Hammer Laravel** |
+| **Jump to Route Source** | `Enter` or `Double-Click` | `Enter` or `Double-Click` | Inside Routes Panel |
+| **Jump to Controller / Method** | `Cmd + B` or `Shift + Enter` | `Ctrl + B` or `Shift + Enter` | Inside Routes Panel |
+
 ---
 
 ## 1. Routes File Search

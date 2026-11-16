@@ -64,6 +64,13 @@ intellijPlatform {
                 <li><b>Color-Coded HTTP Badges:</b> Visual method badges for GET, POST, PUT, DELETE, and ANY with method filtering.</li>
                 <li><b>Dockable Tool Window:</b> Right sidebar panel with live file watcher that auto-indexes routes as you code.</li>
             </ul>
+            <h4>Keyboard Shortcuts:</h4>
+            <ul>
+                <li><b>Search Laravel Routes:</b> <kbd>Shift+Option+R</kbd> (macOS) / <kbd>Shift+Alt+R</kbd> (Win/Linux)</li>
+                <li><b>Open Routes Tool Window:</b> <kbd>Ctrl+Option+R</kbd> (macOS) / <kbd>Ctrl+Alt+R</kbd> (Win/Linux)</li>
+                <li><b>Jump to Route Source:</b> <kbd>Enter</kbd> or <kbd>Double-Click</kbd> (inside Routes panel)</li>
+                <li><b>Jump to Controller Function:</b> <kbd>Cmd+B</kbd> (macOS) / <kbd>Ctrl+B</kbd> (Win/Linux) or <kbd>Shift+Enter</kbd></li>
+            </ul>
         """.trimIndent()
         changeNotes = """
             Initial release of Hammer Laravel.
