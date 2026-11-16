@@ -120,3 +120,46 @@ build/distributions/hammer-laravel-1.0.0.zip
 ```
 Install it in PhpStorm via:
 **Settings** → **Plugins** → ⚙️ (Gear Icon) → **Install Plugin from Disk...**
+
+---
+
+## Publishing as a Hidden / Unlisted Plugin
+
+JetBrains Marketplace allows publishing plugins in **Hidden** mode. A hidden plugin:
+- Is hosted and served by JetBrains Marketplace.
+- **Does not appear** in public search results, marketplace catalog listings, or global IDE search.
+- Can only be accessed/installed via a direct URL, invitation, or designated channel.
+
+### 1. Get a Marketplace Permanent Token
+1. Log in to [JetBrains Marketplace](https://plugins.jetbrains.com).
+2. Go to your profile avatar → **My Profile** → **Permanent Tokens**.
+3. Click **Generate Token** and give it permission for plugin uploads.
+
+### 2. Publish to Marketplace as Hidden
+The build configuration in `build.gradle.kts` is preconfigured with `hidden = true`.
+
+Run:
+```bash
+export JETBRAINS_MARKETPLACE_TOKEN="your-token-here"
+./gradlew publishPlugin
+```
+
+*(Optional)* If you wish to publish to a specific release channel instead of `default`:
+```bash
+./gradlew publishPlugin -PpublishChannels=private-beta
+```
+
+*(Optional)* If you ever want to make a public release:
+```bash
+./gradlew publishPlugin -PpublishHidden=false
+```
+
+### 3. Signing (Optional)
+If you wish to digitally sign your plugin zip before uploading:
+```bash
+export CERTIFICATE_CHAIN="<raw pem certificate chain>"
+export PRIVATE_KEY="<raw pem private key>"
+export PRIVATE_KEY_PASSWORD="<password if key is encrypted>"
+./gradlew publishPlugin
+```
+

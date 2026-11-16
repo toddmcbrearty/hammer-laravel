@@ -53,6 +53,22 @@ intellijPlatform {
             Features intelligent route search with wildcard parameter matching ({}),
             dockable tool window, keyboard shortcuts, and instant file navigation.
         """.trimIndent()
+        changeNotes = """
+            Initial release of Hammer Laravel.
+        """.trimIndent()
+    }
+
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
+    publishing {
+        token = providers.environmentVariable("JETBRAINS_MARKETPLACE_TOKEN")
+        // Default to hidden=true so releases are unlisted/hidden on Marketplace
+        hidden = providers.gradleProperty("publishHidden").map { it.toBoolean() }.orElse(true)
+        channels = providers.gradleProperty("publishChannels").map { it.split(",") }.orElse(listOf("default"))
     }
 }
 
