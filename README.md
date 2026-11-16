@@ -2,7 +2,13 @@
 
 A developer toolkit for Laravel applications in PhpStorm and IntelliJ Platform IDEs.
 
-The plugin provides dedicated tools designed specifically for Laravel developers, starting with **Intelligent Routes File Search** with parameter wildcard matching (`{}`).
+---
+
+## Description
+
+**Hammer Laravel** is a high-performance developer toolkit designed specifically for Laravel development in PhpStorm and IntelliJ Platform IDEs. It provides purpose-built tools that streamline navigating and working with Laravel codebases, starting with an **Intelligent Route Search and Navigation engine**.
+
+Locating route definitions in large Laravel applications can be frustrating when URLs contain dynamic parameters, controller aliases, or route prefixes spread across multiple files. Hammer Laravel solves this by introducing intuitive wildcard parameter matching (`{}`), allowing developers to search for routes like `/users/{}/edit` or paste real-world URLs directly to jump instantly to route definitions or controller actions. With dockable sidebar panels, keyboard-first navigation, and real-time route file indexing, Hammer Laravel eliminates guesswork and accelerates day-to-day Laravel workflows.
 
 ---
 
