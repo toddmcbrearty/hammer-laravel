@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.github.todd"
-version = "1.0.0"
+version = "1.0.1"
 
 repositories {
     mavenCentral()
@@ -37,6 +37,7 @@ java {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
+        freeCompilerArgs.add("-jvm-default=no-compatibility")
     }
 }
 
@@ -73,7 +74,10 @@ intellijPlatform {
             </ul>
         """.trimIndent()
         changeNotes = """
-            Initial release of Hammer Laravel.
+            <ul>
+                <li>Bump version to 1.0.1</li>
+                <li>Add <code>-jvm-default=no-compatibility</code> compiler argument for JVM 25 target compatibility</li>
+            </ul>
         """.trimIndent()
     }
 
