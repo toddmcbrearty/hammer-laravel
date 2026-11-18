@@ -2,6 +2,8 @@
 
 A developer toolkit for Laravel applications in PhpStorm and IntelliJ Platform IDEs.
 
+Note: This is entirely vibe coded. 
+
 ---
 
 ## Description
