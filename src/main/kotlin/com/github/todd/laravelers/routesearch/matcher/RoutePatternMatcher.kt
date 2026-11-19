@@ -26,6 +26,99 @@ object RoutePatternMatcher {
 
     private val HTTP_METHODS = setOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD", "ANY", "MATCH")
 
+    private val BARE_HOST_REGEX = Regex(
+        """^(?:localhost|127\.0\.0\.1|[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,})(?::\d+)?(/.*)?$""",
+        RegexOption.IGNORE_CASE
+    )
+    private val HOST_WITH_PORT_REGEX = Regex(
+        """^(?:localhost|127\.0\.0\.1|[a-zA-Z0-9.-]+):\d+(/.*)?$""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * Strips any URL query parameters (starting with '?') from a route or URL string,
+     * while preserving Laravel optional parameter syntax like '{id?}' or '{name?}'.
+     */
+    fun stripQuery(query: String): String {
+        var inBraces = false
+        for (i in query.indices) {
+            when (query[i]) {
+                '{' -> inBraces = true
+                '}' -> inBraces = false
+                '?' -> {
+                    if (!inBraces) {
+                        return query.substring(0, i).trimEnd()
+                    }
+                }
+            }
+        }
+        return query
+    }
+
+    /**
+     * Strips scheme and domain/port (e.g. 'https://example.com:8000', 'http://localhost', or 'localhost:8000')
+     * from a route or URL string, returning the path component.
+     */
+    fun stripDomain(query: String): String {
+        var s = query.trim()
+        if (s.isEmpty()) return ""
+
+        // Preserve HTTP method prefix if present (e.g. "GET https://example.com/users")
+        val firstSpace = s.indexOf(' ')
+        var methodPrefix = ""
+        if (firstSpace > 0) {
+            val potentialMethod = s.substring(0, firstSpace).uppercase()
+            if (HTTP_METHODS.contains(potentialMethod)) {
+                methodPrefix = s.substring(0, firstSpace + 1)
+                s = s.substring(firstSpace + 1).trim()
+            }
+        }
+
+        // Scheme with :// (e.g. http://localhost:8000/users, https://app.test/api)
+        val protoIdx = s.indexOf("://")
+        if (protoIdx != -1) {
+            val afterProto = s.substring(protoIdx + 3)
+            val slashIdx = afterProto.indexOf('/')
+            val path = if (slashIdx != -1) afterProto.substring(slashIdx) else "/"
+            return methodPrefix + path
+        }
+
+        // Protocol-relative // (e.g. //example.com/users)
+        if (s.startsWith("//")) {
+            val afterSlashes = s.substring(2)
+            val slashIdx = afterSlashes.indexOf('/')
+            val path = if (slashIdx != -1) afterSlashes.substring(slashIdx) else "/"
+            return methodPrefix + path
+        }
+
+        // Bare domain with port (e.g. localhost:8000/users, 127.0.0.1:8000/users, app.test:8080/users)
+        val portMatch = HOST_WITH_PORT_REGEX.matchEntire(s)
+        if (portMatch != null) {
+            val path = portMatch.groupValues[1]
+            return methodPrefix + if (path.isNotEmpty()) path else "/"
+        }
+
+        // Bare domain without scheme (e.g. localhost/users, app.test/users, example.com/api/users)
+        // Must contain a slash after the host to distinguish from route names like "users.index"
+        val hostMatch = BARE_HOST_REGEX.matchEntire(s)
+        if (hostMatch != null) {
+            val path = hostMatch.groupValues[1]
+            if (path.isNotEmpty() && path.startsWith("/")) {
+                return methodPrefix + path
+            }
+        }
+
+        return methodPrefix + s
+    }
+
+    /**
+     * Cleans a pasted route string by removing any domain/host and any query string,
+     * while preserving optional route parameter syntax like '{id?}' or '{name?}'.
+     */
+    fun cleanPastedRoute(query: String): String {
+        return stripDomain(stripQuery(query))
+    }
+
     /**
      * Cleans query paths by stripping scheme, domain/port, query strings, and fragments,
      * while preserving route syntax like '{id?}'.
@@ -34,19 +127,7 @@ object RoutePatternMatcher {
         var s = query.trim()
         if (s.isEmpty()) return ""
 
-        // If scheme://host present (e.g. http://localhost:8000/admin/company/188/accounts), strip to path
-        val protoIdx = s.indexOf("://")
-        if (protoIdx != -1) {
-            val afterProto = s.substring(protoIdx + 3)
-            val slashIdx = afterProto.indexOf('/')
-            s = if (slashIdx != -1) afterProto.substring(slashIdx) else "/"
-        }
-
-        // Strip URL query parameters (e.g. ?tab=billing), while preserving optional parameter syntax '{id?}'
-        val qIdx = s.indexOf('?')
-        if (qIdx != -1 && (qIdx == s.length - 1 || s[qIdx + 1] != '}')) {
-            s = s.substring(0, qIdx)
-        }
+        s = cleanPastedRoute(s)
 
         // Strip fragment '#anchor'
         val hashIdx = s.indexOf('#')
@@ -91,13 +172,14 @@ object RoutePatternMatcher {
             }
         }
 
-        val cleaned = cleanPath(pathQuery)
+        val pathCleaned = cleanPastedRoute(pathQuery)
+        val cleaned = cleanPath(pathCleaned)
         val segments = splitSegments(cleaned)
 
-        val uriRegex = buildRegex(if (cleaned.isNotEmpty()) cleaned else pathQuery, exact = false)
-        val exactRegex = buildRegex(if (cleaned.isNotEmpty()) cleaned else pathQuery, exact = true)
+        val uriRegex = buildRegex(if (cleaned.isNotEmpty()) cleaned else pathCleaned, exact = false)
+        val exactRegex = buildRegex(if (cleaned.isNotEmpty()) cleaned else pathCleaned, exact = true)
 
-        return ParsedQuery(method, pathQuery, uriRegex, exactRegex, cleaned, segments)
+        return ParsedQuery(method, pathCleaned, uriRegex, exactRegex, cleaned, segments)
     }
 
     /**
