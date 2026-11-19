@@ -1,5 +1,6 @@
 package com.github.todd.laravelers.routesearch.ui
 
+import com.github.todd.laravelers.routesearch.matcher.RoutePatternMatcher
 import com.github.todd.laravelers.routesearch.model.RouteItem
 import com.github.todd.laravelers.routesearch.service.LaravelRouteIndexService
 import com.github.todd.laravelers.routesearch.service.RouteNavigationService
@@ -22,6 +23,8 @@ import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.datatransfer.Clipboard
+import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
@@ -29,10 +32,16 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.DefaultListModel
 import javax.swing.JButton
+import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
 import javax.swing.Timer
+import javax.swing.TransferHandler
+import javax.swing.text.AbstractDocument
+import javax.swing.text.AttributeSet
+import javax.swing.text.DocumentFilter
+import javax.swing.text.JTextComponent
 
 class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) {
 
@@ -87,6 +96,7 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
         panel.border = JBUI.Borders.empty(8, 8, 4, 8)
 
         searchField.textEditor.emptyText.text = "Search routes (e.g. admin/company/188/accounts, /go/to/{}/edit)..."
+        setupSearchPasteHandler(searchField.textEditor)
 
         searchField.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
@@ -429,8 +439,84 @@ class LaravelRoutesPanel(private val project: Project) : JPanel(BorderLayout()) 
      */
     fun focusSearch(initialQuery: String? = null) {
         if (!initialQuery.isNullOrBlank()) {
-            searchField.text = initialQuery
+            searchField.text = RoutePatternMatcher.cleanPastedRoute(initialQuery)
         }
         searchField.requestFocusInWindow()
+    }
+
+    companion object {
+        /**
+         * Configures paste and document handling on the search field so that any domain/host
+         * (e.g. 'http://localhost:8000', 'https://example.com') and query string (e.g. '?x=1')
+         * are automatically stripped from pasted routes/URLs, while preserving Laravel optional
+         * route parameter syntax like '{id?}'.
+         */
+        fun setupSearchPasteHandler(textComponent: JTextComponent) {
+            val originalTransferHandler = textComponent.transferHandler
+            textComponent.transferHandler = object : TransferHandler() {
+                override fun canImport(support: TransferSupport): Boolean {
+                    return originalTransferHandler?.canImport(support) ?: super.canImport(support)
+                }
+
+                override fun importData(support: TransferSupport): Boolean {
+                    if (!canImport(support)) return false
+                    if (support.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                        try {
+                            val text = support.transferable.getTransferData(DataFlavor.stringFlavor) as? String
+                            if (text != null) {
+                                val cleaned = RoutePatternMatcher.cleanPastedRoute(text)
+                                val target = support.component as? JTextComponent ?: textComponent
+                                if (support.isDrop) {
+                                    val dropLocation = support.dropLocation as? JTextComponent.DropLocation
+                                    if (dropLocation != null) {
+                                        target.caretPosition = dropLocation.index
+                                    }
+                                }
+                                target.replaceSelection(cleaned)
+                                return true
+                            }
+                        } catch (e: Exception) {
+                            // Fallback to original transfer handler
+                        }
+                    }
+                    return originalTransferHandler?.importData(support) ?: super.importData(support)
+                }
+
+                override fun getSourceActions(c: JComponent): Int {
+                    return originalTransferHandler?.getSourceActions(c) ?: super.getSourceActions(c)
+                }
+
+                override fun exportToClipboard(comp: JComponent, clip: Clipboard, action: Int) {
+                    if (originalTransferHandler != null) {
+                        originalTransferHandler.exportToClipboard(comp, clip, action)
+                    } else {
+                        super.exportToClipboard(comp, clip, action)
+                    }
+                }
+            }
+
+            val doc = textComponent.document
+            if (doc is AbstractDocument) {
+                doc.documentFilter = object : DocumentFilter() {
+                    override fun insertString(fb: FilterBypass, offset: Int, string: String?, attr: AttributeSet?) {
+                        val toInsert = if (string != null && string.length > 1) {
+                            RoutePatternMatcher.cleanPastedRoute(string)
+                        } else {
+                            string
+                        }
+                        super.insertString(fb, offset, toInsert, attr)
+                    }
+
+                    override fun replace(fb: FilterBypass, offset: Int, length: Int, text: String?, attrs: AttributeSet?) {
+                        val toReplace = if (text != null && text.length > 1) {
+                            RoutePatternMatcher.cleanPastedRoute(text)
+                        } else {
+                            text
+                        }
+                        super.replace(fb, offset, length, toReplace, attrs)
+                    }
+                }
+            }
+        }
     }
 }
